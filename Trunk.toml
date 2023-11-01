@@ -1,0 +1,5 @@
+[app]
+index = "./public/index.html"
+dist = "static"
+watch = true
+entry = "./public/main.js"
