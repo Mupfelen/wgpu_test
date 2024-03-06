@@ -131,13 +131,11 @@ pub async fn run() {
                     } => *control_flow = ControlFlow::Exit,
 
                     WindowEvent::KeyboardInput {
-                        input: KeyboardInput {
-                            state: ElementState::Pressed,
-                            virtual_keycode: Some(VirtualKeyCode::Space),
-                            ..
-                        },
-                        ..
+                        input,
+                        device_id,
+                        is_synthetic
                     } => {
+                        if (keyevent.input(event))
                         //audio_stream_manager.play().unwrap();
                     }
                     
