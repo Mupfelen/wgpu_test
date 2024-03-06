@@ -112,7 +112,7 @@ pub async fn run() {
     }
 
     let mut state = State::new(window).await;
-    let mut audio_stream_manager = audio::AudioStreamManager::from_file("res/morse.wav").unwrap();
+    //let mut audio_stream_manager = audio::AudioStreamManager::from_file("res/morse.wav").unwrap();
 
     event_loop.run(move |event, _, control_flow| {
         match event {
@@ -138,7 +138,7 @@ pub async fn run() {
                         },
                         ..
                     } => {
-                        audio_stream_manager.play().unwrap();
+                        //audio_stream_manager.play().unwrap();
                     }
                     
                     WindowEvent::Resized(physical_size) => {

@@ -107,8 +107,9 @@ impl OsuMap {
 
             match mode {
                 "HitObjects" => {
-                    let object = Self::parse_hit_object(line);
-                    map.objects.insert(object.time() as u64, object);
+                    if let Some(object) = Self::parse_hit_object(line) {
+                        map.objects.insert(object.time() as u64, object);
+                    }
                 }
                 "TimingPoints" => {}
                 _ => {}
@@ -120,10 +121,10 @@ impl OsuMap {
 
     fn parse_hit_object(line: &str) -> Option<OsuObject> {
         let mut properties = line.split(",").into_iter();
-        let x = properties.next()?.parse::<f32>()?;
-        let y = properties.next()?.parse::<f32>()?;
-        let time = properties.next()?.parse::<u32>()?;
-        let object_type = properties.next()?.parse::<u32>()? & 0b1011;
+        let x = properties.next()?.parse::<f32>().ok()?;
+        let y = properties.next()?.parse::<f32>().ok()?;
+        let time = properties.next()?.parse::<u32>().ok()?;
+        let object_type = properties.next()?.parse::<u32>().ok()? & 0b1011;
 
         match object_type {
             1 => Some(OsuObject::Circle(OsuCircle { x, y, time })),
@@ -159,25 +160,26 @@ impl OsuMap {
                 let end_time = properties.next().unwrap().parse::<u32>().unwrap();
                 Some(OsuObject::Spinner(OsuSpinner { time, end_time }))
             }
-            _ => None,
+            _ => None
         }
     }
 
     //TODO
     fn parse_timing_point(line: &str) -> Option<TimingPoint> {
         let mut properties = line.split(",").into_iter();
-        let time = properties.next()?.parse::<u32>().unwrap();
-        let bpm = properties.next()?.parse::<f32>().unwrap();
-        let meter = properties.next()?.parse::<u32>().unwrap();
-        let sample_set = properties.next()?.parse::<u32>().unwrap();
-        let sample_index = properties.next()?.parse::<u32>().unwrap();
-        let volume = properties.next()?.parse::<u32>().unwrap();
-        let effects = properties.next()?.parse::<u32>().unwrap();
+        let time = properties.next()?.parse::<u32>().ok()?;
+        let beat_length = properties.next()?.parse::<f32>().ok()?;
+        let meter = properties.next()?.parse::<u32>().ok()?;
+        let sample_set = properties.next()?.parse::<u32>().ok()?;
+        let sample_index = properties.next()?.parse::<u32>().ok()?;
+        let volume = properties.next()?.parse::<u32>().ok()?;
+        let uninherited = properties.next()?.parse::<u32>().ok()?;
+        let effects = properties.next()?.parse::<u32>().ok()?;
 
-        if bpm > 0.0 {
+        if uninherited == 1 {
             Some(TimingPoint::Uninherited(UninheritedTimingPoint {
                 time,
-                bpm,
+                bpm: 60000.0 / beat_length,
                 meter,
                 sample_set,
                 sample_index,
@@ -187,7 +189,7 @@ impl OsuMap {
         } else {
             Some(TimingPoint::Inherited(InheritedTimingPoint {
                 time,
-                slider_multiplier: 100.0 / -bpm,
+                slider_multiplier: 100.0 / -beat_length,
                 sample_set,
                 sample_index,
                 volume,
@@ -202,20 +204,89 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_parse_hit_object() {
+    fn test_parse_hit_object_slider() {
         let line = "339,109,757,6,0,P|361:169|338:224,1,105,0|0,0:0|0:0,0:0:0:0:";
         let object = OsuMap::parse_hit_object(line);
         match object {
-            OsuObject::Slider(slider) => {
+            Some(OsuObject::Slider(slider)) => {
                 assert_eq!(slider.x, 339.0);
                 assert_eq!(slider.y, 109.0);
                 assert_eq!(slider.time, 757);
                 assert_eq!(slider.curve_type, "P");
                 assert_eq!(slider.curve_points, vec![(361.0, 169.0), (338.0, 224.0)]);
                 assert_eq!(slider.repeat, 1);
-                //assert_eq!(slider.pixel_length, 0.0);
+                assert_eq!(slider.pixel_length, 105.0);
             }
-            _ => panic!("Invalid object type"),
+            None => assert!(object.is_some()),
+            _ => assert!(false, "Expected slider, got something else")
+        }
+    }
+    
+    #[test]
+    fn test_parse_hit_object_circle() {
+        let line = "339,109,757,1,0,0:0:0:0:";
+        let object = OsuMap::parse_hit_object(line);
+        match object {
+            Some(OsuObject::Circle(circle)) => {
+                assert_eq!(circle.x, 339.0);
+                assert_eq!(circle.y, 109.0);
+                assert_eq!(circle.time, 757);
+            }
+            None => assert!(object.is_some()),
+            _ => assert!(false, "Expected circle, got something else")
+        }
+    }
+    
+    #[test]
+    fn test_parse_hit_object_spinner() {
+        let line = "339,109,757,8,0,1000,1000,0:0:0:0:";
+        let object = OsuMap::parse_hit_object(line);
+        match object {
+            Some(OsuObject::Spinner(spinner)) => {
+                assert_eq!(spinner.time, 757);
+                assert_eq!(spinner.end_time, 1000);
+            }
+            None => assert!(object.is_some()),
+            _ => assert!(false, "Expected spinner, got something else")
+        }
+    }
+    
+    #[test]
+    fn test_parse_timing_point_uninherited() {
+        //TODO
+        let line = "339,109,757,8,0,1000,1000,0:0:0:0:";
+        let object = OsuMap::parse_timing_point(line);
+        match object {
+            Some(TimingPoint::Uninherited(uninherited)) => {
+                assert_eq!(uninherited.time, 339);
+                assert_eq!(uninherited.bpm, 1000.0 / 60.0);
+                assert_eq!(uninherited.meter, 1000);
+                assert_eq!(uninherited.sample_set, 1000);
+                assert_eq!(uninherited.sample_index, 0);
+                assert_eq!(uninherited.volume, 1000);
+                assert_eq!(uninherited.effects, 0);
+            }
+            None => assert!(object.is_some()),
+            _ => assert!(false, "Expected uninherited, got something else")
+        }
+    }
+    
+    #[test]
+    fn test_parse_timing_point_inherited() {
+        //TODO
+        let line = "339,109,757,8,0,1000,1000,0:0:0:0:";
+        let object = OsuMap::parse_timing_point(line);
+        match object {
+            Some(TimingPoint::Inherited(inherited)) => {
+                assert_eq!(inherited.time, 339);
+                assert_eq!(inherited.slider_multiplier, 100.0 / -1000.0);
+                assert_eq!(inherited.sample_set, 1000);
+                assert_eq!(inherited.sample_index, 0);
+                assert_eq!(inherited.volume, 1000);
+                assert_eq!(inherited.effects, 0);
+            }
+            None => assert!(object.is_some()),
+            _ => assert!(false, "Expected inherited, got something else")
         }
     }
 }
